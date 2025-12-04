@@ -3,23 +3,35 @@ package com.example.finaldemo
 import android.content.Context
 import android.net.Uri
 
-fun readInboxSms(context: Context): List<String> {
-    val smsList = mutableListOf<String>()
+fun readInboxSms(context: Context): List<SmsMessage> {
+    val smsList = mutableListOf<SmsMessage>()
 
     val cursor = context.contentResolver.query(
         Uri.parse("content://sms/inbox"),
-        arrayOf("_id", "address", "body"),
+        arrayOf("_id", "address", "body", "date"),
         null,
         null,
         "date DESC"
     )
 
     cursor?.use {
+        val idIndex = it.getColumnIndex("_id")
+        val senderIndex = it.getColumnIndex("address")
         val bodyIndex = it.getColumnIndex("body")
+        val dateIndex = it.getColumnIndex("date")
+
         while (it.moveToNext()) {
-            smsList.add(it.getString(bodyIndex))
+            smsList.add(
+                SmsMessage(
+                    id = it.getLong(idIndex),
+                    sender = it.getString(senderIndex) ?: "Unknown",
+                    body = it.getString(bodyIndex) ?: "",
+                    timestamp = it.getLong(dateIndex)
+                )
+            )
         }
     }
 
     return smsList
 }
+
