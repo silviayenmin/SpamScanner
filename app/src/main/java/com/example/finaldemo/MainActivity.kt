@@ -25,17 +25,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.StateFlow // Explicitly import StateFlow
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
+import com.example.finaldemo.ui.theme.FinalDemoTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -84,77 +81,81 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val navController = rememberNavController()
-            // Collect the StateFlow as Compose state
-            val currentSmsList by smsListFlow.collectAsState()
+            FinalDemoTheme {
+                val navController = rememberNavController()
+                // Collect the StateFlow as Compose state
+                val currentSmsList by smsListFlow.collectAsState()
 
-            LaunchedEffect(currentSmsList) {
-                if ((currentSmsList as List<SmsMessage>).isEmpty()) return@LaunchedEffect // Avoid processing empty list
+                LaunchedEffect(currentSmsList) {
+                    if (currentSmsList.isEmpty()) return@LaunchedEffect // Avoid processing empty list
 
-                // Debounce the actual heavy classification work
-                snapshotFlow { currentSmsList }
-                    .debounce(300L) // Wait for 300ms of no changes before starting classification
-                    .onEach { latestList ->
-                        isClassifying = true // Start classifying, set state to true
-                        val classifiedMessages = withContext(Dispatchers.Default) {
-                            val tempClassifiedList: MutableList<SmsMessage> = (latestList as List<SmsMessage>).toMutableList()
+                    // Debounce the actual heavy classification work
+                    snapshotFlow { currentSmsList }
+                        .debounce(300L) // Wait for 300ms of no changes before starting classification
+                        .onEach { latestList ->
+                            isClassifying = true // Start classifying, set state to true
+                            val classifiedMessages = withContext(Dispatchers.Default) {
+                                val tempClassifiedList: MutableList<SmsMessage> = latestList.toMutableList()
 
-                            for (i in tempClassifiedList.indices) {
-                                val sms: SmsMessage = tempClassifiedList[i]
-                                if (sms.label.isBlank() || sms.label == "ERROR") {
-                                    try {
-                                        val sender = sms.sender
-                                        val isProvider = sender.matches(Regex("[A-Z]{2}-.+"))
+                                for (i in tempClassifiedList.indices) {
+                                    val sms: SmsMessage = tempClassifiedList[i]
+                                    if (sms.label.isBlank() || sms.label == "ERROR") {
+                                        try {
+                                            val sender = sms.sender
+                                            val isProvider = sender.matches(Regex("[A-Z]{2}-.+"))
 
-                                        val (label, confidence) = if (isProvider) {
-                                            Pair("HAM", 1.0f)
-                                        } else {
-                                            SmsClassifier.predict(sms.body)
+                                            val (label, confidence) = if (isProvider) {
+                                                Pair("HAM", 1.0f)
+                                            } else {
+                                                SmsClassifier.predict(sms.body)
+                                            }
+
+                                            val category = when (label) {
+                                                "SPAM", "SMISHING" -> SmsCategory.SPAM
+                                                else -> SmsCategory.INBOX
+                                            }
+                                            val updatedSms = sms.copy(label = label, confidence = confidence, category = category)
+                                            tempClassifiedList[i] = updatedSms
+                                        } catch (e: Exception) {
+                                            Log.e("MainActivity", "Error classifying SMS", e)
+                                            val updatedSms = sms.copy(label = "ERROR", confidence = 0f, category = SmsCategory.INBOX)
+                                            tempClassifiedList[i] = updatedSms
                                         }
-
-                                        val category = when (label) {
-                                            "SPAM", "SMISHING" -> SmsCategory.SPAM
-                                            else -> SmsCategory.INBOX
-                                        }
-                                        val updatedSms = sms.copy(label = label, confidence = confidence, category = category)
-                                        tempClassifiedList[i] = updatedSms
-                                    } catch (e: Exception) {
-                                        Log.e("MainActivity", "Error classifying SMS", e)
-                                        val updatedSms = sms.copy(label = "ERROR", confidence = 0f, category = SmsCategory.INBOX)
-                                        tempClassifiedList[i] = updatedSms
                                     }
                                 }
+                                tempClassifiedList // Return the fully classified list
                             }
-                            tempClassifiedList // Return the fully classified list
-                        }
 
-                        // Final update after all batches are processed (if any changes were made)
-                        _smsListFlow.value = classifiedMessages
-                        isClassifying = false // Classification complete, set state to false
-                    }.launchIn(this) // Launch the flow collection within the LaunchedEffect's scope
-            }
-
-            NavHost(navController = navController, startDestination = "inbox") {
-                composable("inbox") {
-                    InboxScreen(
-                        smsList = currentSmsList, // Pass the collected StateFlow value
-                        onSmsListChange = { newList -> _smsListFlow.value = newList },
-                        navController = navController,
-                        isClassifying = isClassifying // Pass new state to UI
-                    )
+                            // Final update after all batches are processed (if any changes were made)
+                            if (latestList != classifiedMessages) {
+                                _smsListFlow.value = classifiedMessages
+                            }
+                            isClassifying = false // Classification complete, set state to false
+                        }.launchIn(this) // Launch the flow collection within the LaunchedEffect's scope
                 }
-                composable(
-                    "conversation/{sender}",
-                    arguments = listOf(navArgument("sender") { type = androidx.navigation.NavType.StringType })
-                ) { backStackEntry ->
-                    val sender = backStackEntry.arguments?.getString("sender") ?: ""
-                    ConversationScreen(
-                        sender = sender,
-                        smsList = currentSmsList, // Pass the collected StateFlow value
-                        onSmsListChange = { newList -> _smsListFlow.value = newList },
-                        navController = navController,
-                        isClassifying = isClassifying // Pass new state to UI
-                    )
+
+                NavHost(navController = navController, startDestination = "inbox") {
+                    composable("inbox") {
+                        InboxScreen(
+                            smsList = currentSmsList, // Pass the collected StateFlow value
+                            onSmsListChange = { newList -> _smsListFlow.value = newList },
+                            navController = navController,
+                            isClassifying = isClassifying // Pass new state to UI
+                        )
+                    }
+                    composable(
+                        "conversation/{sender}",
+                        arguments = listOf(navArgument("sender") { type = androidx.navigation.NavType.StringType })
+                    ) { backStackEntry ->
+                        val sender = backStackEntry.arguments?.getString("sender") ?: ""
+                        ConversationScreen(
+                            sender = sender,
+                            smsList = currentSmsList, // Pass the collected StateFlow value
+                            onSmsListChange = { newList -> _smsListFlow.value = newList },
+                            navController = navController,
+                            isClassifying = isClassifying // Pass new state to UI
+                        )
+                    }
                 }
             }
         }
