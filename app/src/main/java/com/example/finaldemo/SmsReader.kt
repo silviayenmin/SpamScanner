@@ -2,8 +2,10 @@ package com.example.finaldemo
 
 import android.content.Context
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-fun readInboxSms(context: Context): List<SmsMessage> {
+suspend fun readInboxSms(context: Context): List<SmsMessage> = withContext(Dispatchers.IO) {
     val smsList = mutableListOf<SmsMessage>()
 
     val cursor = context.contentResolver.query(
@@ -32,6 +34,7 @@ fun readInboxSms(context: Context): List<SmsMessage> {
         }
     }
 
-    return smsList
+    smsList
 }
+
 

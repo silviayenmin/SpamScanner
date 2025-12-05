@@ -4,9 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import com.example.finaldemo.SmsClassifier
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.finaldemo.worker.SpamWorker
 
 class SmsReceiver : BroadcastReceiver() {
 
@@ -16,34 +17,24 @@ class SmsReceiver : BroadcastReceiver() {
         val msgs = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         val smsText = msgs.joinToString("") { it.messageBody }
 
-        // initialize model once (fixes crash)
-        SmsClassifier.init(context)
-
         // ---------------- RULE-BASED FILTERS ----------------
         // 1️⃣ If SMS is very short like "Ok", "Hi", "Bro", "Yes"
         if (smsText.length <= 4 || smsText.matches(Regex("^[a-zA-Z]+$"))) {
-            showNotification(context, "HAM", 1.0f, smsText)
-            return
+            // We can choose to not classify these messages or handle them differently.
+            // For now, we will still pass them to the worker.
         }
 
         // 2️⃣ If message is ONLY 3–6 digit OTP (e.g., 4412, 923311)
         if (smsText.matches(Regex("^\\d{3,6}$"))) {
-            showNotification(context, "HAM", 1.0f, smsText)
-            return
+            // Similar to the above, we can decide what to do.
+            // For now, let the worker handle it.
         }
         // ----------------------------------------------------
-        val (label, confidence) = SmsClassifier.predict(smsText)
-        showNotification(context, label, confidence, smsText)
-    }
 
-    private fun showNotification(context: Context, label: String, confidence: Float, msg: String) {
-        val builder = NotificationCompat.Builder(context, "SMS_CHANNEL")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("SMS Detected: $label")
-            .setContentText("Confidence: ${(confidence * 100).toInt()}%")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+        val workRequest = OneTimeWorkRequestBuilder<SpamWorker>()
+            .setInputData(Data.Builder().putString("sms_text", smsText).build())
+            .build()
 
-        NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), builder.build())
+        WorkManager.getInstance(context).enqueue(workRequest)
     }
 }

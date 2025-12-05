@@ -1,5 +1,6 @@
 package com.example.finaldemo
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,154 +8,130 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.navigation.NavController
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Make sure SmsMessage and SmsCategory are defined (see earlier instructions)
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun InboxScreen() {
-    val context = LocalContext.current
+fun InboxScreen(
+    smsList: List<SmsMessage>,
+    onSmsListChange: (List<SmsMessage>) -> Unit,
+    navController: NavController,
+    isClassifying: Boolean // New parameter
+) {
+    var selectedTab by remember { mutableStateOf(SmsCategory.INBOX) }
 
-    // List of SmsMessage (not String)
-    var smsList by remember { mutableStateOf(listOf<SmsMessage>()) }
-
-    // Selected SMS shown below
-    var selectedSms by remember { mutableStateOf<SmsMessage?>(null) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* handle result if needed */ }
-
-    LaunchedEffect(Unit) {
-        permissionLauncher.launch(
-            arrayOf(
-                android.Manifest.permission.RECEIVE_SMS,
-                android.Manifest.permission.READ_SMS
-            )
-        )
-
-        // load SMS on IO thread
-        val loaded = withContext(Dispatchers.IO) {
-            // readInboxSms must now return List<SmsMessage>
-            readInboxSms(context)
+    val conversations = smsList
+        .groupBy { it.sender }
+        .map { (sender, messages) ->
+            val lastMessage = messages.maxByOrNull { it.timestamp }!!
+            Conversation(sender, lastMessage)
         }
+        .sortedByDescending { it.lastMessage.timestamp }
 
-        // Optionally pre-run model prediction for each sms (this can be slow for many messages)
-        // Here we load messages first, then keep their label/confidence empty until clicked.
-        smsList = loaded
-        SmsClassifier.init(context)   // load model once
-    }
-
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-
-        Text("Tap a message to check spam", style = MaterialTheme.typography.titleLarge)
-
-        Spacer(Modifier.height(10.dp))
-
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            items(smsList, key = { it.id }) { sms ->
-                SmsItem(
-                    sms = sms,
-                    onClick = {
-                        // on click run prediction and set selectedSms
-                        val (label, confidence) = SmsClassifier.predict(sms.body)
-
-                        // create a new copy to show prediction and keep UI immutable
-                        selectedSms = sms.copy(label = label, confidence = confidence)
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = selectedTab.ordinal) {
+            SmsCategory.values().forEach { category ->
+                Tab(
+                    selected = selectedTab == category,
+                    onClick = { selectedTab = category },
+                    text = {
+                        val text = when (category) {
+                            SmsCategory.INBOX -> stringResource(id = R.string.inbox_tab)
+                            SmsCategory.SPAM -> stringResource(id = R.string.spam_tab)
+                            SmsCategory.PROMOTIONS -> stringResource(id = R.string.promotions_tab)
+                        }
+                        Text(text)
                     }
                 )
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        Text("Selected SMS:")
-        Spacer(Modifier.height(6.dp))
-
-        if (selectedSms != null) {
-            SelectedSmsView(selectedSms!!)
+        if (isClassifying) { // Use isClassifying for loading indicator
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         } else {
-            Text("No SMS selected", Modifier.padding(8.dp))
+            val filteredConversations = conversations.filter {
+                val category = when (it.lastMessage.label) {
+                    "SPAM", "SMISHING" -> SmsCategory.SPAM
+                    else -> SmsCategory.INBOX
+                }
+                category == selectedTab
+            }
+
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(top = 20.dp, start = 8.dp, end = 8.dp, bottom = 8.dp)
+            ) {
+                items(filteredConversations, key = { it.sender }) { conversation ->
+                    ConversationItem(
+                        conversation = conversation,
+                        onClick = {
+                            navController.navigate("conversation/${conversation.sender}")
+                        }
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun SmsItem(sms: SmsMessage, onClick: () -> Unit) {
-    Column(
-        Modifier
+fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(10.dp)
-            .background(Color(0xFFF0F0F0))
+            .padding(horizontal = 20.dp, vertical = 4.dp)
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        // Sender row + timestamp
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                text = sms.sender.ifEmpty { "Unknown" },
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            // show short date
-            val sdf = SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
-            Text(text = sdf.format(Date(sms.timestamp)), style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Message preview
-        Text(
-            text = sms.body.take(150),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 4
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        // If we have model prediction already on this sms object, show badge + confidence
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            val labelText = if (sms.label.isBlank()) "UNKNOWN" else sms.label.uppercase()
-            val labelColor = when (sms.label.lowercase()) {
-                "spam" -> Color.Red
-                "smishing" -> Color.Red
-                "promotion" -> Color(0xFF0077FF)
-                "ham" -> Color(0xFF2E7D32)
-                else -> Color.Gray
+        Column(Modifier.padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    text = conversation.sender,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                val sdf = SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
+                Text(
+                    text = sdf.format(Date(conversation.lastMessage.timestamp)),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
-
-            Text(text = labelText, color = labelColor, style = MaterialTheme.typography.bodySmall)
-
-            if (sms.confidence > 0f) {
-                Text(text = "Confidence: ${(sms.confidence * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = conversation.lastMessage.body.take(50), // Show snippet of last message
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                val labelColor = when {
+                    conversation.lastMessage.label.equals("SPAM", true) || conversation.lastMessage.label.equals("SMISHING", true) -> Color.Red
+                    conversation.lastMessage.label.equals("HAM", true) -> Color(0xFF2E7D32)
+                    conversation.lastMessage.label.equals("ERROR", true) -> Color.Magenta
+                    else -> Color.Gray
+                }
+                Text(
+                    text = if (conversation.lastMessage.label.isBlank()) "UNCLASSIFIED" else conversation.lastMessage.label.uppercase(),
+                    color = labelColor,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = 8.dp).wrapContentWidth(Alignment.End)
+                )
             }
         }
     }
 }
 
-@Composable
-fun SelectedSmsView(sms: SmsMessage) {
-    Column(Modifier.padding(8.dp)) {
-        Text(text = sms.sender.ifEmpty { "Unknown" }, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
-        Text(text = sms.body, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Prediction: ${if (sms.label.isBlank()) "Not checked" else sms.label} " +
-                    if (sms.confidence > 0f) "(${(sms.confidence * 100).toInt()}%)" else "",
-            color = if (sms.label.lowercase() == "spam") Color.Red else Color.Unspecified
-        )
-    }
-}
+

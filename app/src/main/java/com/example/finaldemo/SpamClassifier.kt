@@ -6,6 +6,9 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import android.util.Log
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
 object SmsClassifier {
 
     private var model: Interpreter? = null
@@ -32,15 +35,20 @@ object SmsClassifier {
 
     /** call one time only */
     fun init(context: Context) {
-        if (model == null) {
-            model = Interpreter(loadModel(context, "sms_spam_model.tflite"))
-            vocab = loadVocab(context, "vocab.txt")
+        try {
+            if (model == null) {
+                model = Interpreter(loadModel(context, "sms_spam_model.tflite"))
+                vocab = loadVocab(context, "vocab.txt")
+            }
+        } catch (e: Exception) {
+            Log.e("SmsClassifier", "Error initializing classifier", e)
+            model = null
+            vocab = null
         }
     }
 
     private fun tokenize(text: String): IntArray {
         val words = text.lowercase().split(Regex("\\W+"))
-//        val tokens = words.map { vocab?.get(it) ?: 1 }
         val tokens = words.map { vocab?.get(it) ?: vocab?.get("<OOV>") ?: 1 }
 
         val arr = IntArray(maxLen) { 0 }
@@ -53,25 +61,27 @@ object SmsClassifier {
         return arr
     }
 
-
-
-
-
-
-
     fun predict(text: String): Pair<String, Float> {
-        val tokens = tokenize(text)
-        val floatTokens = FloatArray(tokens.size)   // FloatArray
-
-        for (i in tokens.indices) {
-            floatTokens[i] = tokens[i].toFloat()
+        if (model == null || vocab == null) {
+            return Pair("HAM", 0.0f)
         }
-        // Correct input tensor shape: [1, 200] float32
-//        val input = Array(1) { tokens.map { it.toFloat() }.toFloatArray() }
-        val input = arrayOf(floatTokens)
-        val output = Array(1) { FloatArray(3) }  // 3 classes
+        val tokens = tokenize(text)
+        
+        val byteBuffer = ByteBuffer.allocateDirect(maxLen * 4)
+        byteBuffer.order(ByteOrder.nativeOrder())
+        for (token in tokens) {
+            byteBuffer.putFloat(token.toFloat())
+        }
+        byteBuffer.rewind()
 
-        model?.run(input, output)
+        val output = Array(1) { FloatArray(3) }
+
+        try {
+            model?.run(byteBuffer, output)
+        } catch (e: Exception) {
+            Log.e("SmsClassifier", "Error running model", e)
+            return Pair("HAM", 0.0f)
+        }
 
         val result = output[0]
         val index = result.indices.maxByOrNull { result[it] } ?: 0
@@ -87,6 +97,4 @@ object SmsClassifier {
 
         return Pair(label, confidence)
     }
-
-
 }
