@@ -1,6 +1,5 @@
 package com.example.finaldemo
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.role.RoleManager
@@ -13,11 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
@@ -25,9 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import android.util.Log
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.snapshotFlow
 import com.example.finaldemo.ui.theme.FinalDemoTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -36,20 +29,15 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
-    // Use a StateFlow to manage the SMS list, for debouncing
-    private val _smsListFlow = MutableStateFlow(listOf<SmsMessage>())
-    // Expose as an immutable StateFlow
-    val smsListFlow: StateFlow<List<SmsMessage>> = _smsListFlow.asStateFlow()
-
-    private var isClassifying by mutableStateOf(false) // New state variable
+    private val smsDao by lazy { (application as SpamApp).database.smsDao() }
+    private val smsListFlow by lazy { smsDao.getAll() }
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             super.onChange(selfChange)
-            lifecycleScope.launch {
-                // When content changes, reload messages and push to flow
-                _smsListFlow.value = readInboxSms(applicationContext)
-            }
+            refreshSmsMessages()
         }
     }
 
@@ -75,72 +63,20 @@ class MainActivity : ComponentActivity() {
             smsObserver
         )
 
-        // Initial load should push to the flow
-        lifecycleScope.launch {
-            _smsListFlow.value = readInboxSms(applicationContext)
-        }
+        refreshSmsMessages()
 
         setContent {
             FinalDemoTheme {
                 val navController = rememberNavController()
-                // Collect the StateFlow as Compose state
-                val currentSmsList by smsListFlow.collectAsState()
-
-                LaunchedEffect(currentSmsList) {
-                    if (currentSmsList.isEmpty()) return@LaunchedEffect // Avoid processing empty list
-
-                    // Debounce the actual heavy classification work
-                    snapshotFlow { currentSmsList }
-                        .debounce(300L) // Wait for 300ms of no changes before starting classification
-                        .onEach { latestList ->
-                            isClassifying = true // Start classifying, set state to true
-                            val classifiedMessages = withContext(Dispatchers.Default) {
-                                val tempClassifiedList: MutableList<SmsMessage> = latestList.toMutableList()
-
-                                for (i in tempClassifiedList.indices) {
-                                    val sms: SmsMessage = tempClassifiedList[i]
-                                    if (sms.label.isBlank() || sms.label == "ERROR") {
-                                        try {
-                                            val sender = sms.sender
-                                            val isProvider = sender.matches(Regex("[A-Z]{2}-.+"))
-
-                                            val (label, confidence) = if (isProvider) {
-                                                Pair("HAM", 1.0f)
-                                            } else {
-                                                SmsClassifier.predict(sms.body)
-                                            }
-
-                                            val category = when (label) {
-                                                "SPAM", "SMISHING" -> SmsCategory.SPAM
-                                                else -> SmsCategory.INBOX
-                                            }
-                                            val updatedSms = sms.copy(label = label, confidence = confidence, category = category)
-                                            tempClassifiedList[i] = updatedSms
-                                        } catch (e: Exception) {
-                                            Log.e("MainActivity", "Error classifying SMS", e)
-                                            val updatedSms = sms.copy(label = "ERROR", confidence = 0f, category = SmsCategory.INBOX)
-                                            tempClassifiedList[i] = updatedSms
-                                        }
-                                    }
-                                }
-                                tempClassifiedList // Return the fully classified list
-                            }
-
-                            // Final update after all batches are processed (if any changes were made)
-                            if (latestList != classifiedMessages) {
-                                _smsListFlow.value = classifiedMessages
-                            }
-                            isClassifying = false // Classification complete, set state to false
-                        }.launchIn(this) // Launch the flow collection within the LaunchedEffect's scope
-                }
+                val currentSmsList by smsListFlow.collectAsState(initial = emptyList())
+                val isLoading by this.isLoading.collectAsState()
 
                 NavHost(navController = navController, startDestination = "inbox") {
                     composable("inbox") {
                         InboxScreen(
-                            smsList = currentSmsList, // Pass the collected StateFlow value
-                            onSmsListChange = { newList -> _smsListFlow.value = newList },
+                            smsList = currentSmsList,
                             navController = navController,
-                            isClassifying = isClassifying // Pass new state to UI
+                            isLoading = isLoading
                         )
                     }
                     composable(
@@ -150,18 +86,45 @@ class MainActivity : ComponentActivity() {
                         val sender = backStackEntry.arguments?.getString("sender") ?: ""
                         ConversationScreen(
                             sender = sender,
-                            smsList = currentSmsList, // Pass the collected StateFlow value
-                            onSmsListChange = { newList -> _smsListFlow.value = newList },
-                            navController = navController,
-                            isClassifying = isClassifying // Pass new state to UI
+                            smsList = currentSmsList,
+                            navController = navController
                         )
                     }
                 }
             }
         }
-
-        // 🔥 Ask user to make this the default SMS app
+        
         requestDefaultSmsRole()
+    }
+
+    private fun refreshSmsMessages() {
+        _isLoading.value = true
+        lifecycleScope.launch {
+            val messagesFromDevice = readInboxSms(applicationContext)
+            val messagesFromDb = smsDao.getAll().first()
+            val dbIds = messagesFromDb.map { it.id }.toSet()
+            val newMessages = messagesFromDevice.filter { it.id !in dbIds }
+
+            if (newMessages.isNotEmpty()) {
+                val classifiedMessages = withContext(Dispatchers.Default) {
+                    newMessages.map { sms ->
+                        try {
+                            val (label, confidence) = SmsClassifier.predict(sms.body)
+                            val category = when (label) {
+                                "SPAM", "SMISHING" -> SmsCategory.SPAM
+                                else -> SmsCategory.INBOX
+                            }
+                            sms.copy(label = label, confidence = confidence, category = category)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error classifying SMS", e)
+                            sms.copy(label = "ERROR")
+                        }
+                    }
+                }
+                smsDao.insertAll(classifiedMessages)
+            }
+            _isLoading.value = false
+        }
     }
 
     override fun onDestroy() {
@@ -172,8 +135,7 @@ class MainActivity : ComponentActivity() {
     private fun requestDefaultSmsRole() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
-            val isDefault = roleManager.isRoleHeld(RoleManager.ROLE_SMS)
-            if (!isDefault) {
+            if (!roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
                 val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
                 startActivity(intent)
             }
@@ -192,3 +154,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

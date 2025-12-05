@@ -29,9 +29,7 @@ import java.util.*
 fun ConversationScreen(
     sender: String,
     smsList: List<SmsMessage>,
-    onSmsListChange: (List<SmsMessage>) -> Unit,
-    navController: NavController,
-    isClassifying: Boolean
+    navController: NavController
 ) {
     val messages = smsList.filter { it.sender == sender }.sortedBy { it.timestamp }
     val isShortCode = sender.matches(Regex("[A-Z]{2}-.+"))

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")
 }
 
 android {
@@ -64,6 +65,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.15.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation(libs.androidx.room.ktx)
+    kapt("androidx.room:room-compiler:2.6.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

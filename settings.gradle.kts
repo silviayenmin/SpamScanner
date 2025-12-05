@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "final demo"
 include(":app")
- 

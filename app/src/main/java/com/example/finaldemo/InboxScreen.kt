@@ -23,17 +23,17 @@ import java.util.*
 @Composable
 fun InboxScreen(
     smsList: List<SmsMessage>,
-    onSmsListChange: (List<SmsMessage>) -> Unit,
     navController: NavController,
-    isClassifying: Boolean
+    isLoading: Boolean
 ) {
     var selectedTab by remember { mutableStateOf(SmsCategory.INBOX) }
 
     val conversations = smsList
         .groupBy { it.sender }
-        .map { (sender, messages) ->
-            val lastMessage = messages.maxByOrNull { it.timestamp }!!
-            Conversation(sender, lastMessage)
+        .mapNotNull { (sender, messages) ->
+            messages.maxByOrNull { it.timestamp }?.let { lastMessage ->
+                Conversation(sender, lastMessage)
+            }
         }
         .sortedByDescending { it.lastMessage.timestamp }
 
@@ -63,9 +63,13 @@ fun InboxScreen(
                 }
             }
 
-            if (isClassifying && conversations.isEmpty()) {
+            if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
+                }
+            } else if (smsList.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No messages")
                 }
             } else {
                 val filteredConversations = conversations.filter {

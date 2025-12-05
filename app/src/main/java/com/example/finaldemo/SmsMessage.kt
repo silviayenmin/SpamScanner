@@ -1,7 +1,11 @@
 package com.example.finaldemo
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "sms_messages")
 data class SmsMessage(
-    val id: Long,
+    @PrimaryKey val id: Long,
     val sender: String,
     val body: String,
     val timestamp: Long,
