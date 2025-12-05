@@ -100,10 +100,22 @@ class MainActivity : ComponentActivity() {
     private fun refreshSmsMessages() {
         _isLoading.value = true
         lifecycleScope.launch {
+            val startTime = System.currentTimeMillis()
+            Log.d("MainActivity", "Starting refreshSmsMessages at $startTime")
+
             val messagesFromDevice = readInboxSms(applicationContext)
+            val readDeviceTime = System.currentTimeMillis()
+            Log.d("MainActivity", "Read ${messagesFromDevice.size} messages from device in ${readDeviceTime - startTime} ms")
+
             val messagesFromDb = smsDao.getAll().first()
+            val readDbTime = System.currentTimeMillis()
+            Log.d("MainActivity", "Read ${messagesFromDb.size} messages from DB in ${readDbTime - readDeviceTime} ms")
+
             val dbIds = messagesFromDb.map { it.id }.toSet()
             val newMessages = messagesFromDevice.filter { it.id !in dbIds }
+            val filterNewTime = System.currentTimeMillis()
+            Log.d("MainActivity", "Found ${newMessages.size} new messages in ${filterNewTime - readDbTime} ms")
+
 
             if (newMessages.isNotEmpty()) {
                 val classifiedMessages = withContext(Dispatchers.Default) {
@@ -121,9 +133,16 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                val classifiedTime = System.currentTimeMillis()
+                Log.d("MainActivity", "Classified ${classifiedMessages.size} messages in ${classifiedTime - filterNewTime} ms")
+
                 smsDao.insertAll(classifiedMessages)
+                val insertTime = System.currentTimeMillis()
+                Log.d("MainActivity", "Inserted ${classifiedMessages.size} messages into DB in ${insertTime - classifiedTime} ms")
             }
             _isLoading.value = false
+            val endTime = System.currentTimeMillis()
+            Log.d("MainActivity", "Finished refreshSmsMessages in ${endTime - startTime} ms")
         }
     }
 

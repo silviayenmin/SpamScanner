@@ -19,7 +19,11 @@ abstract class SmsDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmsDatabase::class.java,
                     "sms_database"
-                ).build()
+                )
+                    // Allows Room to recreate the database if a downgrade is detected.
+                    // Use with caution in production as it leads to data loss.
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
                 INSTANCE = instance
                 instance
             }
