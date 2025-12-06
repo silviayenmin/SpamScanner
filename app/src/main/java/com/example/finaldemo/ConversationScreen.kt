@@ -31,7 +31,7 @@ fun ConversationScreen(
     smsList: List<SmsMessage>,
     navController: NavController
 ) {
-    val messages = smsList.filter { it.sender == sender }.sortedBy { it.timestamp }
+    val messages = smsList.filter { it.sender == sender }.sortedByDescending { it.timestamp }
     val isShortCode = sender.matches(Regex("[A-Z]{2}-.+"))
 
     Scaffold(
@@ -96,7 +96,7 @@ fun ConversationScreen(
             color = MaterialTheme.colorScheme.background
         ) {
             LazyColumn(
-                modifier = Modifier.padding(horizontal = 8.dp),
+                modifier = Modifier,
                 reverseLayout = true
             ) {
                 items(messages) { message ->
@@ -111,30 +111,31 @@ fun ConversationScreen(
 @Composable
 fun MessageItem(message: SmsMessage) {
     val messageDate = Date(message.timestamp)
-    val sdf = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("EEE dd MMM - HH:mm", Locale.getDefault())
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Text(
+            text = sdf.format(messageDate),
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
         Card(
-            modifier = Modifier.widthIn(max = 300.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = message.body, style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = sdf.format(messageDate),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
                     val (label, color) = when {
                         message.label.equals("SPAM", true) -> "SPAM" to Color.Red
                         message.label.equals("SMISHING", true) -> "SMISHING" to Color(0xFFD32F2F)
