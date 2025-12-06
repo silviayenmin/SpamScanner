@@ -61,6 +61,7 @@ object SmsClassifier {
         return arr
     }
 
+    @Synchronized
     fun predict(text: String): Pair<String, Float> {
         if (model == null || vocab == null) {
             return Pair("HAM", 0.0f)

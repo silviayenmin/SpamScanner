@@ -34,9 +34,18 @@ class MainActivity : ComponentActivity() {
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val PROMOTIONAL_KEYWORDS = setOf(
+        "offer", "discount", "sale", "promo", "coupon", "cashback", "free", "deal", "save", "exclusive", "limited time",
+        "bank", "card", "credit", "debit", "emi", "loan", "account", "balance", "transaction", "payment", "bill", "recharge",
+        "order", "shipping", "delivery", "purchase", "shop", "product", "website", "app", "link", "http", "https",
+        "alert", "update", "plan", "pack", "validity", "service",
+        "win", "reward", "prize", "claim", "hurry"
+    )
+
     private val smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             super.onChange(selfChange)
+            Log.d("MainActivity", "smsObserver.onChange triggered!")
             refreshSmsMessages()
         }
     }
@@ -59,7 +68,7 @@ class MainActivity : ComponentActivity() {
         )
 
         contentResolver.registerContentObserver(
-            Uri.parse("content://sms/inbox"),
+            Uri.parse("content://sms"),
             true,
             smsObserver
         )
@@ -95,7 +104,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        requestDefaultSmsRole()
+        // requestDefaultSmsRole()
     }
 
     private fun refreshSmsMessages() {
@@ -125,6 +134,12 @@ class MainActivity : ComponentActivity() {
                             val (label, confidence) = SmsClassifier.predict(sms.body)
                             val category = when (label) {
                                 "SPAM", "SMISHING" -> SmsCategory.SPAM
+                                "HAM" -> {
+                                    val isPromotional = PROMOTIONAL_KEYWORDS.any { keyword ->
+                                        sms.body.contains(keyword, ignoreCase = true)
+                                    }
+                                    if (isPromotional) SmsCategory.PROMOTIONS else SmsCategory.INBOX
+                                }
                                 else -> SmsCategory.INBOX
                             }
                             sms.copy(label = label, confidence = confidence, category = category)

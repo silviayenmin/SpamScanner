@@ -1,5 +1,6 @@
 package com.example.finaldemo
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,8 +38,14 @@ fun ConversationScreen(
     val context = LocalContext.current
     val contactName = ContactHelper.getContactName(context, sender)
     val senderDisplayName = contactName ?: sender
+    Log.d("ConversationScreen", "Sender: '$sender'")
+    Log.d("ConversationScreen", "Total SMS list size: ${smsList.size}")
     val messages = smsList.filter { it.sender == sender }.sortedByDescending { it.timestamp }
     val isShortCode = sender.matches(Regex("[A-Z]{2}-.+"))
+    Log.d("ConversationScreen", "Filtered messages count: ${messages.size}")
+    if (messages.isNotEmpty()) {
+        Log.d("ConversationScreen", "Most recent message: '${messages.first().body}' from '${messages.first().sender}'")
+    }
 
     Scaffold(
         topBar = {
