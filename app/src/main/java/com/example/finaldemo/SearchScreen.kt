@@ -4,22 +4,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.finaldemo.ui.theme.TextSecondary
+import com.example.finaldemo.utils.SimHelper
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -30,6 +33,8 @@ import java.util.*
 @Composable
 fun SearchScreen(navController: NavController, smsDao: SmsDao) {
     var searchQuery by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val carrierNames by remember { mutableStateOf(SimHelper.getCarrierNames(context)) }
 
     val searchResults by produceState<List<SmsMessage>>(initialValue = emptyList(), searchQuery) {
         snapshotFlow { searchQuery } 
@@ -54,6 +59,7 @@ fun SearchScreen(navController: NavController, smsDao: SmsDao) {
     }
 
     Scaffold(
+        containerColor = Color(0xFFF0F4F8), // Light gray background for the whole screen
         topBar = {
             TopAppBar(
                 title = {
@@ -89,39 +95,42 @@ fun SearchScreen(navController: NavController, smsDao: SmsDao) {
                 )
             )
         }
-    ) {
-paddingValues ->
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    FilterChip(icon = Icons.Default.Email, label = "Unread", onClick = { searchQuery = "filter:unread" })
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    FilterChip(icon = Icons.Default.Person, label = "Know", onClick = { searchQuery = "filter:known" })
+                FilterChip(modifier = Modifier.weight(1f), icon = Icons.Default.Email, label = "Unread", onClick = { searchQuery = "filter:unread" })
+                FilterChip(modifier = Modifier.weight(1f), icon = Icons.Default.Person, label = "Know", onClick = { searchQuery = "filter:known" })
+            }
+            if (carrierNames.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    carrierNames.forEach { carrierName ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            val simpleName = carrierName.split(" ")[0].split("|")[0]
+                            FilterChip(
+                                icon = Icons.Default.SimCard,
+                                label = simpleName, // Display the simplified name
+                                onClick = { searchQuery = "sender:$simpleName" }
+                            )
+                        }
+                    }
+                    if (carrierNames.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    FilterChip(icon = Icons.Default.PhoneAndroid, label = "Airtel", onClick = { searchQuery = "sender:Airtel" })
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    FilterChip(icon = Icons.Default.PhoneAndroid, label = "VI", onClick = { searchQuery = "sender:VI" })
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             HorizontalDivider()
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -189,12 +198,58 @@ fun SearchResultItem(message: SmsMessage, onClick: () -> Unit) {
     }
 }
 
+//@Composable
+//fun FilterChip(modifier: Modifier = Modifier, icon: ImageVector, label: String, onClick: () -> Unit = {}) {
+//    val chipColors = AssistChipDefaults.assistChipColors(
+//        containerColor = Color.White,
+//        labelColor = MaterialTheme.colorScheme.primary,
+//        leadingIconContentColor = MaterialTheme.colorScheme.primary
+//    )
+//
+//    ElevatedAssistChip(
+//        modifier = modifier.height(46.dp),
+//        onClick = onClick,
+//        label = { Text(label) },
+//        leadingIcon = { Icon(icon, contentDescription = label) },
+//        shape = RoundedCornerShape(12.dp),
+//        colors = chipColors,
+//        elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 2.dp)
+//    )
+//}
 @Composable
-fun FilterChip(modifier: Modifier = Modifier, icon: ImageVector, label: String, onClick: () -> Unit = {}) {
-    ElevatedAssistChip(
-        modifier = modifier.fillMaxWidth(),
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, contentDescription = label) }
-    )
+fun FilterChip(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit = {}
+) {
+    Surface(
+        modifier = modifier
+            .height(64.dp)
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
 }
+
