@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,8 +20,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.example.finaldemo.ui.theme.TextSecondary
+import com.example.finaldemo.utils.ContactHelper
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +34,9 @@ fun ConversationScreen(
     smsList: List<SmsMessage>,
     navController: NavController
 ) {
+    val context = LocalContext.current
+    val contactName = ContactHelper.getContactName(context, sender)
+    val senderDisplayName = contactName ?: sender
     val messages = smsList.filter { it.sender == sender }.sortedByDescending { it.timestamp }
     val isShortCode = sender.matches(Regex("[A-Z]{2}-.+"))
 
@@ -46,14 +52,23 @@ fun ConversationScreen(
                                 .background(Color.LightGray),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = sender.take(2).uppercase(),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
+                            if (contactName != null && contactName.isNotEmpty()) {
+                                Text(
+                                    text = contactName.take(2).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Placeholder",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(sender, style = MaterialTheme.typography.titleLarge)
+                        Text(senderDisplayName, style = MaterialTheme.typography.titleLarge)
                     }
                 },
                 navigationIcon = {

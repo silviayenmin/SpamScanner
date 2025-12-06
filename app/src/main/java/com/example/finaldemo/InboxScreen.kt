@@ -15,8 +15,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.example.finaldemo.ui.theme.TextSecondary
+import com.example.finaldemo.utils.ContactHelper
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -100,6 +102,10 @@ fun InboxScreen(
 
 @Composable
 fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val contactName = ContactHelper.getContactName(context, conversation.sender)
+    val senderDisplayName = contactName ?: conversation.sender
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,7 +121,7 @@ fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = conversation.sender,
+                    text = senderDisplayName,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 val sdf = SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
