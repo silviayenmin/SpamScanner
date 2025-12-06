@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +34,8 @@ import java.util.*
 fun ConversationScreen(
     sender: String,
     smsList: List<SmsMessage>,
-    navController: NavController
+    navController: NavController,
+    smsDao: SmsDao
 ) {
     val context = LocalContext.current
     val contactName = ContactHelper.getContactName(context, sender)
@@ -45,6 +47,11 @@ fun ConversationScreen(
     Log.d("ConversationScreen", "Filtered messages count: ${messages.size}")
     if (messages.isNotEmpty()) {
         Log.d("ConversationScreen", "Most recent message: '${messages.first().body}' from '${messages.first().sender}'")
+    }
+
+    // Mark messages as read when the conversation is viewed
+    LaunchedEffect(key1 = sender, key2 = messages.size) {
+        smsDao.markConversationAsRead(sender)
     }
 
     Scaffold(

@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,7 +16,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.example.finaldemo.ui.theme.TextSecondary
@@ -22,6 +23,7 @@ import com.example.finaldemo.utils.ContactHelper
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InboxScreen(
     smsList: List<SmsMessage>,
@@ -39,60 +41,82 @@ fun InboxScreen(
         }
         .sortedByDescending { it.lastMessage.timestamp }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            TabRow(
-                selectedTabIndex = selectedTab.ordinal,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                SmsCategory.values().forEach { category ->
-                    Tab(
-                        selected = selectedTab == category,
-                        onClick = { selectedTab = category },
-                        text = {
-                            val text = when (category) {
-                                SmsCategory.INBOX -> stringResource(id = R.string.inbox_tab)
-                                SmsCategory.SPAM -> stringResource(id = R.string.spam_tab)
-                                SmsCategory.PROMOTIONS -> stringResource(id = R.string.promotions_tab)
-                            }
-                            Text(text)
-                        }
-                    )
-                }
-            }
-
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (smsList.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No messages")
-                }
-            } else {
-                val filteredConversations = conversations.filter {
-                    val category = when (it.lastMessage.label) {
-                        "SPAM", "SMISHING" -> SmsCategory.SPAM
-                        else -> SmsCategory.INBOX
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Message") },
+                actions = {
+                    IconButton(onClick = { navController.navigate("search") }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search Messages")
                     }
-                    category == selectedTab
-                }
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(8.dp)
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
+    ) { paddingValues ->
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                TabRow(
+                    selectedTabIndex = selectedTab.ordinal,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
-                    items(filteredConversations, key = { it.sender }) { conversation ->
-                        ConversationItem(
-                            conversation = conversation,
-                            onClick = {
-                                navController.navigate("conversation/${conversation.sender}")
+                    SmsCategory.values().forEach { category ->
+                        Tab(
+                            selected = selectedTab == category,
+                            onClick = { selectedTab = category },
+                            text = {
+                                val text = when (category) {
+                                    SmsCategory.INBOX -> stringResource(id = R.string.inbox_tab)
+                                    SmsCategory.SPAM -> stringResource(id = R.string.spam_tab)
+                                    SmsCategory.PROMOTIONS -> stringResource(id = R.string.promotions_tab)
+                                }
+                                Text(text)
                             }
                         )
+                    }
+                }
+
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (smsList.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No messages")
+                    }
+                } else {
+                    val filteredConversations = conversations.filter {
+                        val category = when (it.lastMessage.label) {
+                            "SPAM", "SMISHING" -> SmsCategory.SPAM
+                            else -> SmsCategory.INBOX
+                        }
+                        category == selectedTab
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(8.dp)
+                    ) {
+                        items(filteredConversations, key = { it.sender }) { conversation ->
+                            ConversationItem(
+                                conversation = conversation,
+                                onClick = {
+                                    navController.navigate("conversation/${conversation.sender}")
+                                }
+                            )
+                        }
                     }
                 }
             }

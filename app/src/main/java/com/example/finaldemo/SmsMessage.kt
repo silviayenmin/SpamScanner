@@ -11,7 +11,10 @@ data class SmsMessage(
     val timestamp: Long,
     val label: String = "",       // spam/ham
     val confidence: Float = 0f,   // 0.0 - 1.0
-    val category: SmsCategory = SmsCategory.INBOX
+    val category: SmsCategory = SmsCategory.INBOX,
+    val isRead: Boolean = false,
+    val isFromContact: Boolean = false,
+    val senderName: String? = null
 )
 
 enum class SmsCategory {

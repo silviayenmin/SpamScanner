@@ -3,6 +3,7 @@ package com.example.finaldemo
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
 import android.net.Uri
@@ -22,6 +23,7 @@ import androidx.navigation.navArgument
 import android.util.Log
 import androidx.compose.runtime.collectAsState
 import com.example.finaldemo.ui.theme.FinalDemoTheme
+import com.example.finaldemo.utils.ContactHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -54,6 +56,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         createNotificationChannel()
+        backfillContactNames()
 
         // Request SMS & Notification permissions
         ActivityCompat.requestPermissions(
@@ -97,8 +100,12 @@ class MainActivity : ComponentActivity() {
                         ConversationScreen(
                             sender = sender,
                             smsList = currentSmsList,
-                            navController = navController
+                            navController = navController,
+                            smsDao = smsDao
                         )
+                    }
+                    composable("search") {
+                        SearchScreen(navController = navController, smsDao = smsDao)
                     }
                 }
             }
@@ -142,7 +149,14 @@ class MainActivity : ComponentActivity() {
                                 }
                                 else -> SmsCategory.INBOX
                             }
-                            sms.copy(label = label, confidence = confidence, category = category)
+                            val contactName = ContactHelper.getContactName(applicationContext, sms.sender)
+                            sms.copy(
+                                label = label,
+                                confidence = confidence,
+                                category = category,
+                                isFromContact = contactName != null,
+                                senderName = contactName
+                            )
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Error classifying SMS", e)
                             sms.copy(label = "ERROR")
@@ -159,6 +173,34 @@ class MainActivity : ComponentActivity() {
             _isLoading.value = false
             val endTime = System.currentTimeMillis()
             Log.d("MainActivity", "Finished refreshSmsMessages in ${endTime - startTime} ms")
+        }
+    }
+
+    private fun backfillContactNames() {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val isBackfilled = prefs.getBoolean("contact_names_backfilled_v1", false)
+
+        if (!isBackfilled) {
+            Log.d("MainActivity", "Starting one-time contact name backfill.")
+            lifecycleScope.launch(Dispatchers.IO) {
+                val allMessages = smsDao.getAll().first()
+                val messagesToUpdate = allMessages.mapNotNull { message ->
+                    // Re-check contact name for all messages
+                    val contactName = ContactHelper.getContactName(applicationContext, message.sender)
+                    if (contactName != null) {
+                        message.copy(senderName = contactName, isFromContact = true)
+                    } else {
+                        null // No update needed if no contact name
+                    }
+                }
+
+                if (messagesToUpdate.isNotEmpty()) {
+                    smsDao.insertAll(messagesToUpdate)
+                    Log.d("MainActivity", "Backfilled ${messagesToUpdate.size} contact names.")
+                }
+                
+                prefs.edit().putBoolean("contact_names_backfilled_v1", true).apply()
+            }
         }
     }
 
@@ -189,4 +231,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
