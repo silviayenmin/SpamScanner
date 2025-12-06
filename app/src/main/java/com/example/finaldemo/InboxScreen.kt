@@ -112,7 +112,8 @@ fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
             .padding(vertical = 4.dp, horizontal = 8.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
