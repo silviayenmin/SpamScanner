@@ -137,7 +137,7 @@ fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -153,7 +153,7 @@ fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
                 Text(
                     text = sdf.format(Date(conversation.lastMessage.timestamp)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -165,7 +165,7 @@ fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
                 Text(
                     text = conversation.lastMessage.body,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)

@@ -9,10 +9,11 @@ val TextPrimary = Color(0xFF212121)
 val TextSecondary = Color(0xFF757575)
 
 // Dark Theme Colors
-val DarkPrimary = Color(0xFF263A99) // A distinct dark grey for primary elements
-val DarkSurface = Color(0xFF2A2A2A)
-val DarkBackground = Color(0xFF121212)
-val DarkOnSurface = Color(0xFFE0E0E0)
+val DarkPrimary = Color(0xFF263A99)       // Reverting to darker blue for primary
+val DarkSurface = Color(0xFF263238)        // Blue Grey 900
+val DarkBackground = Color(0xFF1E272C)     // A custom dark background
+val DarkOnSurface = Color(0xFFFFFFFF)      // White text for high contrast
+
 
 
 // Default Palette (can be removed later)

@@ -63,20 +63,20 @@ fun ConversationScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color.LightGray),
+                                .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             if (contactName != null && contactName.isNotEmpty()) {
                                 Text(
                                     text = contactName.take(2).uppercase(),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Person,
                                     contentDescription = "Placeholder",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -149,7 +149,7 @@ fun MessageItem(message: SmsMessage) {
         Text(
             text = sdf.format(messageDate),
             style = MaterialTheme.typography.labelSmall,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
             modifier = Modifier.padding(vertical = 4.dp)
         )
         Card(
